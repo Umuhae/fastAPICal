@@ -1,0 +1,32 @@
+# macOS 관련
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Python 기본
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# 가상환경
+venv/
+.env/
+.envrc
+
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# FastAPI 자동 생성 파일
+*.log
+*.db

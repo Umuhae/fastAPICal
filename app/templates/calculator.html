@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>FastAPI 계산기</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 50px;
+      gap: 40px;
+    }
+
+    /* 계산기 박스 */
+    .calculator {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      width: 300px;
+    }
+
+    .display {
+      background: #222;
+      color: #0f0;
+      font-size: 2rem;
+      text-align: right;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
+    }
+
+    .buttons button {
+      padding: 20px;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .operator {
+      background-color: #ffe08c;
+    }
+
+    .equal {
+      background-color: #8ce2ff;
+      grid-column: span 2;
+    }
+
+    .clear {
+      background-color: #ff8c8c;
+    }
+
+    .normal {
+      background-color: #f0f0f0;
+    }
+
+    /* 오른쪽 전체 */
+    .history-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 300px;
+    }
+
+    .history {
+      background: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .history h3 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 5px;
+    }
+
+    .history ul {
+      list-style: none;
+      padding-left: 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .history li {
+      font-size: 0.9rem;
+      padding: 4px 0;
+      border-bottom: 1px dotted #ddd;
+      cursor: pointer;
+    }
+
+    .history li:hover {
+      background-color: #f7f7f7;
+    }
+
+    .history-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 왼쪽: 계산기 -->
+  <div class="calculator">
+    <div id="display" class="display">0</div>
+    <div class="buttons">
+      <button class="clear">C</button>
+      <button class="normal">(</button>
+      <button class="normal">)</button>
+      <button class="operator">/</button>
+
+      <button class="normal">7</button>
+      <button class="normal">8</button>
+      <button class="normal">9</button>
+      <button class="operator">*</button>
+
+      <button class="normal">4</button>
+      <button class="normal">5</button>
+      <button class="normal">6</button>
+      <button class="operator">-</button>
+
+      <button class="normal">1</button>
+      <button class="normal">2</button>
+      <button class="normal">3</button>
+      <button class="operator">+</button>
+
+      <button class="normal">0</button>
+      <button class="normal">.</button>
+      <button class="equal">=</button>
+    </div>
+  </div>
+
+  <!-- 오른쪽: 기록 영역 -->
+  <div class="history-container">
+
+    <div class="history">
+      <div class="history-buttons">
+        <button onclick="saveHistoryToFile()">📥 저장</button>
+        <button onclick="loadHistoryFromFile()">📂 불러오기</button>
+      </div>
+      <h3>🕘 최근 계산 기록</h3>
+      <ul id="historyList"></ul>
+    </div>
+
+    <div class="history">
+      <h3>📂 파일에서 불러온 기록</h3>
+      <ul id="fileHistoryList"></ul>
+    </div>
+
+  </div>
+
+  <script>
+    const display = document.getElementById("display");
+    const buttons = document.querySelectorAll(".buttons button");
+    const historyList = document.getElementById("historyList");
+    const fileHistoryList = document.getElementById("fileHistoryList");
+
+    let currentExpression = "";
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", async () => {
+        const value = button.textContent;
+
+        if (value === "C") {
+          currentExpression = "";
+          display.textContent = "0";
+        } else if (value === "=") {
+          try {
+            const res = await fetch("/calculate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ expression: currentExpression }),
+            });
+
+            if (!res.ok) {
+              display.textContent = "Error";
+              currentExpression = "";
+              return;
+            }
+
+            const data = await res.json();
+            display.textContent = data.result;
+            currentExpression = data.result.toString();
+
+            await loadHistory(); // 계산 후 기록 다시 불러오기
+          } catch (err) {
+            display.textContent = "Error";
+            currentExpression = "";
+          }
+        } else {
+          currentExpression += value;
+          display.textContent = currentExpression;
+        }
+      });
+    });
+
+    async function loadHistory() {
+      const res = await fetch("/records");
+      const records = await res.json();
+
+      historyList.innerHTML = "";
+      records.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = `${item.expression} = ${item.result}`;
+
+        li.addEventListener("click", () => calculateAgain(item.expression));
+        historyList.appendChild(li);
+      });
+    }
+
+    async function saveHistoryToFile() {
+      const res = await fetch("/save-file", { method: "POST" });
+      if (res.ok) {
+        alert("✅ 기록이 파일로 저장되었습니다.");
+      } else {
+        alert("❌ 저장 실패");
+      }
+    }
+
+    async function loadHistoryFromFile() {
+      const res = await fetch("/load-file");
+      const records = await res.json();
+
+      fileHistoryList.innerHTML = "";
+      records.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = `${item.expression} = ${item.result}`;
+        li.addEventListener("click", () => calculateAgain(item.expression));
+        fileHistoryList.appendChild(li);
+      });
+    }
+
+    async function calculateAgain(expression) {
+      try {
+        const res = await fetch("/calculate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expression }),
+        });
+
+        if (!res.ok) {
+          display.textContent = "Error";
+          currentExpression = "";
+          return;
+        }
+
+        const data = await res.json();
+        display.textContent = data.result;
+        currentExpression = data.result.toString();
+
+        await loadHistory();
+      } catch (err) {
+        display.textContent = "Error";
+        currentExpression = "";
+      }
+    }
+
+    loadHistory();
+  </script>
+</body>
+</html>
